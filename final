@@ -1,0 +1,262 @@
+ddd_id_final = read.csv("Documents/Masters/Fall 2016/Shen/DDD_ID_final_161024.csv")
+control_final = read.csv("Documents/Masters/Fall 2016/Shen/control_final.csv")
+
+#de novo mutation burden
+case_syn = length(which(ddd_id_final[,"Variant"] == "SILENT"))
+case_lgd = length(which(ddd_id_final[,"Variant"] == "LGD"))
+case_mis = length(which(ddd_id_final[,"Variant"] == "MIS"))
+case_other = length(which(ddd_id_final[,"Variant"] == "OTHER"))
+cases = 4293 + 820 + 41
+
+ctrl_syn = length(which(control_final[,"Variant"] == "SILENT"))
+ctrl_lgd = length(which(control_final[,"Variant"] == "LGD"))
+ctrl_mis = length(which(control_final[,"Variant"] == "MIS"))
+ctrl_other = length(which(control_final[,"Variant"] == "OTHER"))
+ctrls = 1911
+
+#enrichment
+(case_syn/cases)/(ctrl_syn/ctrls)
+(case_lgd/cases)/(ctrl_lgd/ctrls)
+(case_mis/cases)/(ctrl_mis/ctrls)
+binom.test(case_syn, (case_syn + ctrl_syn), p = (cases)/(cases + ctrls), alternative = "two.sided",conf.level = 0.95)$p.value
+binom.test(case_lgd, (case_lgd + ctrl_lgd), p = (cases)/(cases + ctrls), alternative = "two.sided",conf.level = 0.95)$p.value
+binom.test(case_mis, (case_mis + ctrl_mis), p = (cases)/(cases + ctrls), alternative = "two.sided",conf.level = 0.95)$p.value
+
+#CASES
+mutation_rate = read.csv("Documents/Masters/Fall 2016/Shen/control_adjust_mutation_rate.csv")
+syn_mut = sum(mutation_rate[,"silent"])
+syn_expect = 2 * cases * syn_mut
+syn_actual = length(which(ddd_id_final[,"Variant"]=="SILENT"))
+ppois(syn_actual, syn_expect, lower.tail=F)
+lgd_mut = sum(mutation_rate[,"LGD"])
+lgd_expect = 2 * cases * lgd_mut #2 = 2 copies
+lgd_actual = length(which(ddd_id_final[,"Variant"]=="LGD"))
+ppois(lgd_actual, lgd_expect, lower.tail = F)
+mis_mut = sum(mutation_rate[,"DMIS_metaSVM"])
+mis_expect = 2 * cases * mis_mut
+mis_actual = length(which(ddd_id_final[,"Variant"]=="MIS"))
+ppois(mis_actual, mis_expect, lower.tail = F)
+
+#case enrichment
+syn_actual/syn_expect
+lgd_actual/lgd_expect
+mis_actual/mis_expect
+
+#CONTROL
+syn_expect_ctrl = 2 * ctrls * syn_mut
+syn_actual_ctrl = length(which(control_final[,"Variant"]=="SILENT"))
+ppois(syn_actual_ctrl, syn_expect_ctrl, lower.tail=F)
+lgd_expect_ctrl = 2 * ctrls * lgd_mut #2 = 2 copies
+lgd_actual_ctrl = length(which(control_final[,"Variant"]=="LGD"))
+ppois(lgd_actual_ctrl, lgd_expect_ctrl, lower.tail = F)
+mis_expect_ctrl = 2 * ctrls * mis_mut
+mis_actual_ctrl = length(which(control_final[,"Variant"]=="MIS"))
+ppois(mis_actual_ctrl, mis_expect_ctrl, lower.tail = F)
+
+#control enrichment
+syn_actual_ctrl/syn_expect_ctrl
+lgd_actual_ctrl/lgd_expect_ctrl
+mis_actual_ctrl/mis_expect_ctrl
+
+#gene expression data
+expression = read.csv("Documents/Masters/Fall 2016/Shen/Brain Microarrays/Developing/gene_array_matrix_csv/expression_matrix.csv", header=F)
+expression=expression[,2:ncol(expression)]
+columns = read.csv("Documents/Masters/Fall 2016/Shen/Brain Microarrays/Developing/gene_array_matrix_csv/columns_metadata.csv")
+columns = columns[,2:ncol(columns)]
+colnames(expression) = paste(columns[,"age"], ",", columns[,"structure_acronym"], columns[,"structure_name"])
+rows = read.csv("Documents/Masters/Fall 2016/Shen/Brain Microarrays/Developing/gene_array_matrix_csv/rows_metadata.csv")
+rows = rows[,2:ncol(rows)]
+which(!(which(duplicated(rows[,"gene_symbol"])) %in% which(duplicated(rows))))
+which(duplicated(rows[,"gene_symbol"]))[62]
+rows[4683,]
+grep("FSIP2", rows[,"gene_symbol"])
+rows[4646,]
+rows[4646,] = rows[4683,]
+rows = rows[-4683,]
+#row 4646 (gene id 94476), row 4683 (gene id 125404) FSIP2; averaged the expression of duplicated gene
+expression[4646,] = colMeans(rbind(expression[4646,], expression[4683,]))
+expression = expression[-4683,]
+expression = expression[setdiff(1:nrow(expression),c(which(duplicated(expression)))),]
+rows = rows[setdiff(1:nrow(rows), c(which(duplicated(rows)))),]
+dim(expression)
+library(limma)
+exp = avearrays(expression)
+expmean0 = exp-colMeans(exp)
+expsd = apply(expmean0,2,sd)
+normexp = expmean0/expsd
+rownames(normexp) = rows[,"gene_symbol"]
+
+#lgd in all regions of the brain
+normexp = read.csv("Documents/Masters/Fall 2016/Shen/Brain Microarrays/Developing/gene_array_matrix_csv/norm_expression_matrix_161031.csv", row.names=1)
+ddd_id_final = read.csv("Documents/Masters/Fall 2016/Shen/DDD_ID_final_161024.csv")
+control_final = read.csv("Documents/Masters/Fall 2016/Shen/control_final.csv")
+#### LGDs in case and control
+case.lgd = ddd_id_final[which(ddd_id_final[,"Variant"] == "LGD"),]
+ctrl.lgd = control_final[which(control_final["Variant"] == "LGD"),]
+#case.lgd.genes = as.character(unique(case.lgd[,"Gene.refgene"]))
+case.lgd.genes = as.character(unique(case.lgd[which(duplicated(case.lgd[,"Gene.refgene"])),"Gene.refgene"]))
+#intersect(case.lgd.genes, ctrl.lgd.genes.recurrent)
+#case.lgd.genes.recurrent = setdiff(case.lgd.genes, intersect(case.lgd.genes, ctrl.lgd.genes.recurrent))
+ctrl.lgd.genes = as.character(unique(ctrl.lgd[,"GeneName"]))
+#intersect(case.lgd.genes, ctrl.lgd.genes)
+ctrl.lgd.genes = setdiff(ctrl.lgd.genes, intersect(case.lgd.genes, ctrl.lgd.genes))
+lgd.genes = c(case.lgd.genes, ctrl.lgd.genes)
+case.exp.lgd.genes = rownames(normexp[which(rownames(normexp) %in% case.lgd.genes),])
+ctrl.exp.lgd.genes = rownames(normexp[which(rownames(normexp) %in% ctrl.lgd.genes),])
+exp.lgd.genes = rownames(normexp[which(rownames(normexp) %in% lgd.genes),])
+
+#lgd across all brain times and times
+exp.lgd = normexp[exp.lgd.genes,1:186]
+exp.lgd$groups = factor(ifelse(rownames(exp.lgd) %in% ctrl.exp.lgd.genes, "Control", "Case"))
+lgd.pca = princomp(exp.lgd[,1:186])
+lgd.scores = lgd.pca$scores
+lgd.loadings = lgd.pca$loadings
+library(ggfortify)
+autoplot(lgd.pca, data = exp.lgd, colour = 'groups')
+t.test(lgd.scores[,1]~exp.lgd$groups)
+t.test(lgd.scores[,1]~exp.lgd$groups)$p.val
+library(glmnet)
+elastic = glmnet(lgd.scores, as.factor(exp.lgd[,187]), alpha=0.5, family='binomial')
+plot(elastic, xvar="lambda", label=T)
+lgd.aov = aov(lgd.scores~exp.lgd$groups)
+
+#lgd across amygdala
+AMY.lgd = normexp[exp.lgd.genes,grep("amygdaloid", colnames(normexp))]
+AMY.lgd = AMY.lgd[,1:11]
+AMY.lgd$groups = factor(ifelse(rownames(AMY.lgd) %in% ctrl.exp.lgd.genes, "Control", "Case"))
+AMY.pca = princomp(AMY.lgd[,1:11])
+AMY.scores = AMY.pca$scores
+AMY.loadings = AMY.pca$loadings
+library(ggfortify)
+autoplot(AMY.pca, data = AMY.lgd, colour = 'groups')
+t.test(AMY.scores[,1]~AMY.lgd$groups)
+t.test(AMY.scores[,1]~AMY.lgd$groups)$p.val
+library(glmnet)
+AMY.elastic = glmnet(AMY.scores, as.factor(AMY.lgd[,12]), alpha=0.5, family='binomial')
+plot(AMY.elastic, xvar="lambda", label=T)
+AMY.aov = aov(AMY.scores~AMY.lgd$groups)
+
+#lgd across hippocampus
+HIP.lgd = normexp[,grep("hippocampus", colnames(normexp))]
+HIP.lgd = HIP.lgd[exp.lgd.genes,1:11]
+HIP.lgd$groups = factor(ifelse(rownames(HIP.lgd) %in% ctrl.exp.lgd.genes, "Control", "Case"))
+HIP.pca = princomp(HIP.lgd[,1:11])
+HIP.scores = HIP.pca$scores
+HIP.loadings = HIP.pca$loadings
+library(ggfortify)
+autoplot(HIP.pca, data = HIP.lgd, colour = 'groups')
+t.test(HIP.scores[,1]~HIP.lgd$groups)
+t.test(HIP.scores[,1]~HIP.lgd$groups)$p.val
+library(glmnet)
+HIP.elastic = glmnet(HIP.scores, as.factor(HIP.lgd[,12]), alpha=0.5, family='binomial')
+plot(HIP.elastic, xvar="lambda", label=T)
+HIP.aov = aov(HIP.scores~HIP.lgd$groups)
+
+#lgd across cerebellar cortex
+CER.lgd= normexp[,c(grep("rhombic", colnames(normexp)),grep("cerebellar", colnames(normexp)))]
+CER.lgd = CER.lgd[c(case.exp.lgd.genes, ctrl.exp.lgd.genes),1:10]
+CER.lgd$groups = factor(ifelse(rownames(CER.lgd) %in% ctrl.exp.lgd.genes, "Control", "Case"))
+CER.pca = princomp(CER.lgd[,1:10])
+CER.scores = CER.pca$scores
+CER.loadings = CER.pca$loadings
+library(ggfortify)
+autoplot(CER.pca, data = CER.lgd, colour = 'groups')
+t.test(CER.scores[,1]~CER.lgd$groups)
+t.test(CER.scores[,1]~CER.lgd$groups)$p.val
+library(glmnet)
+CER.elastic = glmnet(CER.scores, as.factor(CER.lgd[,11]), alpha=0.5, family='binomial')
+plot(CER.elastic, xvar="lambda", label=T)
+CER.aov = aov(CER.scores~CER.lgd$groups)
+
+#lgd across primary motor cortex
+M1C = normexp[,grep("M1C", colnames(normexp))]
+M1C.lgd = M1C[c(case.exp.lgd.genes, ctrl.exp.lgd.genes),1:12]
+M1C.lgd$groups = factor(ifelse(rownames(M1C.lgd) %in% ctrl.exp.lgd.genes, "Control", "Case"))
+M1C.pca = princomp(M1C.lgd[,1:12])
+M1C.scores = M1C.pca$scores
+M1C.loadings = M1C.pca$loadings
+library(ggfortify)
+autoplot(M1C.pca, data = M1C.lgd, colour = 'groups')
+t.test(M1C.scores[,1]~M1C.lgd$groups)
+t.test(M1C.scores[,1]~M1C.lgd$groups)$p.val
+library(glmnet)
+M1C.elastic = glmnet(M1C.scores, as.factor(M1C.lgd[,13]), alpha=0.5, family='binomial')
+plot(M1C.elastic, xvar="lambda", label=T)
+M1C.aov = aov(M1C.scores~M1C.lgd$groups)
+
+#lgd in inferior parietal cortex
+IPC.lgd = normexp[exp.lgd.genes,grep("IPC", colnames(normexp))]
+IPC.lgd = IPC.lgd[,1:10]
+IPC.lgd$groups = factor(ifelse(rownames(IPC.lgd) %in% case.exp.lgd.genes, "Case", "Control"))
+IPC.pca = princomp(IPC.lgd[,1:10])
+IPC.scores = IPC.pca$scores
+IPC.loadings = IPC.pca$loadings
+library(ggfortify)
+autoplot(IPC.pca, data = IPC.lgd, colour = 'groups')
+t.test(IPC.scores[,1]~IPC.lgd$groups)
+t.test(IPC.scores[,1]~IPC.lgd$groups)$p.val
+library(glmnet)
+IPC.elastic = glmnet(IPC.scores, as.factor(IPC.lgd[,11]), alpha=0.5, family='binomial')
+plot(IPC.elastic, xvar="lambda", label=T)
+IPC.aov = aov(IPC.scores~IPC.lgd$groups)
+
+#lgd in striatum
+#grep("CGE", colnames(normexp)); grep("LGE", colnames(normexp)); grep("MGE", colnames(normexp)); grep("STR", colnames(normexp))
+STR = c(2,7,9,18,22,24,43,59,72,91,102,118,134,157,184,211,229,245,261,276,305,321,337,353,368,383)
+STR.lgd = normexp[exp.lgd.genes,STR]
+STR.lgd = STR.lgd[,1:15]
+STR.lgd$groups = factor(ifelse(rownames(STR.lgd) %in% case.exp.lgd.genes, "Case", "Control"))
+STR.pca = princomp(STR.lgd[,1:15])
+STR.scores = STR.pca$scores
+STR.loadings = STR.pca$loadings
+library(ggfortify)
+autoplot(STR.pca, data = STR.lgd, colour = 'groups')
+t.test(STR.scores[,1]~STR.lgd$groups)
+t.test(STR.scores[,1]~STR.lgd$groups)$p.val
+library(glmnet)
+STR.elastic = glmnet(STR.scores, as.factor(STR.lgd[,16]), alpha=0.5, family='binomial')
+plot(STR.elastic, xvar="lambda", label=T)
+STR.aov = aov(STR.scores~STR.lgd$groups)
+
+#lgd in dorsolateral prefontal cortex
+DFC.lgd = normexp[exp.lgd.genes,grep("DFC", colnames(normexp))]
+DFC.lgd = DFC.lgd[,1:13]
+DFC.lgd$groups = factor(ifelse(rownames(DFC.lgd) %in% case.exp.lgd.genes, "Case", "Control"))
+which((rownames(DFC.lgd) %in% case.exp.lgd.genes) & (DFC.lgd[,14] =="Case"))
+DFC.pca = princomp(DFC.lgd[,1:13])
+DFC.scores = DFC.pca$scores
+DFC.loadings = DFC.pca$loadings
+library(ggfortify)
+autoplot(DFC.pca, data = DFC.lgd, colour = 'groups')
+t.test(DFC.scores[,1]~DFC.lgd$groups)
+t.test(DFC.scores[,1]~DFC.lgd$groups)$p.val
+library(glmnet)
+DFC.elastic = glmnet(DFC.scores, as.factor(DFC.lgd[,14]), alpha=0.5, family='binomial')
+plot(DFC.elastic, xvar="lambda", label=T)
+DFC.aov = aov(DFC.scores~DFC.lgd$groups)
+
+all = names(lgd.scores[order(lgd.scores[,1]),1])
+all.source = as.character(exp.lgd[names(lgd.scores[order(lgd.scores[,1]),1]),187])
+amy = names(AMY.scores[order(AMY.scores[,1]),1])
+amy.source = as.character(AMY.lgd[names(AMY.scores[order(AMY.scores[,1]),1]),12])
+hip = names(HIP.scores[order(HIP.scores[,1], decreasing=T),1])
+hip.source = as.character(HIP.lgd[names(HIP.scores[order(HIP.scores[,1], decreasing=T),1]),12])
+cer = names(CER.scores[order(CER.scores[,1]),1])
+cer.source = as.character(CER.lgd[names(CER.scores[order(CER.scores[,1]),1]),11])
+m1c = names(M1C.scores[order(M1C.scores[,1]),1])
+m1c.source = as.character(M1C.lgd[names(M1C.scores[order(M1C.scores[,1]),1]),13])
+ofc = names(OFC.scores[order(OFC.scores[,1]),1])
+ofc.source = as.character(OFC.lgd[names(OFC.scores[order(OFC.scores[,1]),1]),12])
+ipc = names(IPC.scores[order(IPC.scores[,1]),1])
+ipc.source = as.character(IPC.lgd[names(IPC.scores[order(IPC.scores[,1]),1]),11])
+str = names(STR.scores[order(STR.scores[,1]),1])
+str.source = as.character(STR.lgd[names(STR.scores[order(STR.scores[,1]),1]),16])
+dfc = names(DFC.scores[order(DFC.scores[,1]),1])
+dfc.source = as.character(DFC.lgd[names(DFC.scores[order(DFC.scores[,1]),1]),14])
+
+pc1.order = matrix(c(all, amy, hip, cer, m1c, ofc, ipc, str, dfc), ncol=9)
+pc1.source = matrix(c(all.source, amy.source, hip.source, cer.source, m1c.source, ofc.source, ipc.source, str.source, dfc.source), ncol=9)
+colnames(pc1.order) = c("ALL", "AMY", "HIP", "CER", "M1C", "OFC", "IPC", "STR", "DFC")
+colnames(pc1.source) = c("ALL", "AMY", "HIP", "CER", "M1C", "OFC", "IPC", "STR", "DFC")
+
+
